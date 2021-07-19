@@ -1,145 +1,191 @@
-#define ENT_MAX 4096
-#define SYS_MAX 128
-#define NCOMPONENTS 5
-#define X(A,B,C,D)
+#include <stdio.h>
+/******************************************************************************
+ * 1. Tell the lib how many entities and systems we need.
+ * 2. Create a blank X macro, followed by a COMPONENTS define. The first arg
+ * to X is the enum name you want to give your component. The second arg is
+ * the type name of a struct placed in the anonymous "ecs" struct. The third
+ * arg is the member name to place in the anonymous "ecs" struct.
+******************************************************************************/
+#define ENT_MAX 4
+#define SYS_MAX 4
+#define X(A,B,C)
 #define COMPONENTS\
-	X(POINT,point,points,sizeof(point))\
-	X(EDGE,edge,edges,sizeof(edge))\
-	X(POLY,poly,polys,sizeof(poly))\
-	X(PHYS,phys,physs,sizeof(phys))\
-	X(COLOR,color,colors,sizeof(color))
-/* The lib defines an entity the same way, but lowercase. */	
-typedef unsigned long long ENTITY;
+	X(CMP_POINT,Point,points)\
+	X(CMP_EDGE,Edge,edges)\
+	X(CMP_POLY,Poly,polys)\
+	X(CMP_PHYS,Phys,phys)\
+	X(CMP_COLOR,Color,colors)
 
-typedef struct point
+typedef unsigned long long Entity; /*Yes, that's really all it is.*/
+
+typedef struct Point
 {
 	int x;
 	int y;
 	int ox;//old x
 	int oy;//old y
-}point;
+}Point;
 
-typedef struct edge
+typedef struct Edge
 {
-	ENTITY a;
-	ENTITY b;
-}edge;
+	Entity a;
+	Entity b;
+}Edge;
 
-#define POINT_MAX 1024
-#define EDGE_MAX POINT_MAX
-typedef struct poly
+#define CMP_POINT_MAX 1024
+#define CMP_EDGE_MAX CMP_POINT_MAX
+
+typedef struct Poly
 {
-	unsigned short n_points;
-	unsigned short n_edges;
-	ENTITY points[POINT_MAX];
-	ENTITY edges[EDGE_MAX];
-}poly;
+	unsigned short nPoints;
+	unsigned short nEdges;
+	Entity points[CMP_POINT_MAX];
+	Entity edges[CMP_EDGE_MAX];
+}Poly;
 
-typedef struct phys
+typedef struct Phys
 {
 	int mass;
 	int gravity;
 	int friction;
-}phys;
+}Phys;
 
-typedef struct color
+typedef struct Color
 {
 	unsigned char r;
 	unsigned char g;
 	unsigned char b;
 	unsigned char a;
-}color;
+}Color;
 
 /* 
-	lib must be include after struct defs. your probably defining struct
+	The lib must be included after struct defs. You're probably defining struct
 	layouts in headers, so shouldn't be an issue.
 */
 #include "secs.h"
-#include <stdio.h>
 
-ENTITY point_new(int x,int y)
+/*
+	To create an entity, we call EntityNew(), which returns us an index. 
+	We then add components to it using ToggleComponent().
+	We then retrieve those components by indexing into the ecs struct
+	using the member name you supplied as the third arg to the X macro,
+	and the newly created entity id. From here, you can change anything
+	you like about the entity.
+*/
+
+Entity PointNew(int x,int y)
 {
-	ENTITY E=entity_new();
-	toggle_component(E,1<<POINT);
-	toggle_component(E,1<<COLOR);
-	toggle_component(E,1<<PHYS);
-	
-	point* P=get_component(E,POINT);
-	P->x=x;
-	P->y=y;
-	P->ox=x;
-	P->ox=y;
+	Entity E=EntityNew();
+	ToggleComponent(E,CMP_POINT);
+	ToggleComponent(E,CMP_PHYS);
+	ToggleComponent(E,CMP_COLOR);
 
-	color* C=get_component(E,COLOR);
-	C->r=255;
-	C->g=0;
-	C->b=0;
-	C->a=255;
+	Point* point=&ecs.points[E];
+	point->x=x;
+	point->y=y;
+	point->ox=x;
+	point->ox=y;
+
+	Phys* phys=&ecs.phys[E];
+	phys->mass=1;
+	phys->gravity=1;
+	phys->friction=1;
+
+	Color* color=&ecs.colors[E];
+	color->r=255;
+	color->g=0;
+	color->b=0;
+	color->a=255;
 
 	return E;
 }
 
-void point_tick(ENTITY E)
+/*
+	To create a system, you merely create a void function with an
+	unsigned long long as its first parameter. This is the entity
+	that the system is currently operating on.
+*/
+
+void PointTick(Entity E)
 {
-	point* P=get_component(E,POINT);
+	Point* point=&ecs.points[E];
+	Phys* phys=&ecs.phys[E];
 	// do verlet integration or something.
+	printf("PointTick: %d\n",E);
 }
 
-void point_render(ENTITY E)
+void PointRender(Entity E)
 {
+	Point* point=&ecs.points[E];
+	Color* color=&ecs.colors[E];
 	// rendering the point sounds like a good idea
+	printf("PointRender: %d\n",E);
 }
 
-ENTITY edge_new(ENTITY A,ENTITY B)
+Entity EdgeNew(Entity A,Entity B)
 {
-	ENTITY E=entity_new();
-	toggle_component(E,1<<EDGE);
-	toggle_component(E,1<<COLOR);
+	Entity E=EntityNew();
+	ToggleComponent(E,CMP_EDGE);
+	ToggleComponent(E,CMP_COLOR);
 
-	edge* Edge=get_component(E,EDGE);
-	Edge->a=A;
-	Edge->b=B;
+	Edge* edge=&ecs.edges[E];
+	edge->a=A;
+	edge->b=B;
 
-	color* C=get_component(E,COLOR);
-	C->r=255;
-	C->g=255;
-	C->b=255;
-	C->a=255;
+	Color* color=&ecs.colors[E];
+	color->r=255;
+	color->g=255;
+	color->b=255;
+	color->a=255;
 
 	return E;	
 }
 
-void edge_tick(ENTITY E)
+void EdgeTick(Entity E)
 {
-	edge* Edge=get_component(E,EDGE);
-	point* P1=get_component(Edge->a,POINT);//get the first point's point
-	point* P2=get_component(Edge->b,POINT);//get the second point's point
+	Edge* edge=&ecs.edges[E];
+	Point* A=&ecs.points[edge->a];//get the first point's point
+	Point* B=&ecs.points[edge->b];//get the second point's point
 	//constain them or something
+	printf("EdgeTick: %d PointA:%d PointB:%d\n",E,A,B);
 }
 
-void edge_render(ENTITY E)
+void EdgeRender(Entity E)
 {
+	Edge* edge=&ecs.edges[E];
+	Color* color=&ecs.colors[E];
 	//draw the edge
+	printf("EdgeRender: %d\n",E);
 }
 
-/* I hope you get the idea by now, i'm not writing a whole physics engine for you. */
-
-void tick(int sims)
-{
-	for(;sims>0;sims--)
-		for(int I=0;I<SYS_MAX;I++)
-			for(int J=0;J<ENT_MAX;J++)
-				ecs.systems[I].run(ecs.systems[I].entities[J]);
-}
+/*
+	To create our systems, we call SystemNew, supplying the
+	components we wish to operate on and what an entity must consist of
+	in order to execute. We then pass the callback we wish to execute
+	when the time comes. The order in which you call SystemNew() is the
+	order in which the systems will fire. Therefore, placing a render
+	system before an input system is probably a bad idea.
+*/
 
 int main(int argc,char** argv)
 {
-	/* Make 2 points and attach an edge between them. */
-	/* You can expand on this concept with polygons. */
-	ENTITY P1=point_new(100,100);
-	ENTITY P2=point_new(100,150);
-	ENTITY E1=edge_new(P1,P2);
+	SystemNew((1<<CMP_POINT)|(1<<CMP_PHYS),PointTick);//9
+	SystemNew((1<<CMP_EDGE),EdgeTick);//2
+	SystemNew((1<<CMP_EDGE)|(1<<CMP_COLOR),EdgeRender);//18
+	SystemNew((1<<CMP_POINT)|(1<<CMP_COLOR),PointRender);//17
+	
+	Entity P1=PointNew(200,200);//25
+	Entity P2=PointNew(232,200);//25
+	Entity E1=EdgeNew(P1,P2);//18
 
-	tick(10);
+	/*
+		Do your game loop or whatever. SystemTick will handle passing you each
+		of its entities iteratively, so you operate on one at a time.
+	*/
+	int sims=10;
+	for(;sims;sims--)
+	{
+		SystemTick();
+	}
 	return 0;
 }

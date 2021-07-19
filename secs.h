@@ -1,77 +1,69 @@
 #ifndef __SECS_H__
 #define __SECS_H__
 #define CMP_MAX 64
-#include <stdarg.h>
-typedef unsigned long long entity,mask;
-typedef void (*fn)(entity);
 #ifdef  X
 #undef  X
-#define X(A,B,C,D) A,
+#define X(A,B,C) A,
 #endif/*X*/
-typedef enum component{COMPONENTS}component;
-typedef struct system
+enum Component{COMPONENTS};
+
+struct System
 {
-	entity entities[ENT_MAX];
-	mask mask;
-	fn run;
-}system;
+	unsigned char entities[ENT_MAX];/*Bool array*/
+	unsigned long long mask;
+	void (*run)(unsigned long long);
+};
+
 struct
 {
-	entity entities[ENT_MAX];
-	unsigned short structs[NCOMPONENTS]; /* Struct sizes. */
+	unsigned long long entities[ENT_MAX];
 	#undef  X
-	#define X(A,B,C,D) B C[ENT_MAX];
-	COMPONENTS /* Component data. */
-	system systems[SYS_MAX];
-}ecs= /* Anon handle */
+	#define X(A,B,C) B C[ENT_MAX];
+	COMPONENTS
+	struct System systems[SYS_MAX];
+}ecs=
 {
 	.entities={0},
+	.systems={0},
 	#undef  X
-	#define X(A,B,C,D) D,
-	.structs={COMPONENTS}, /* Expand struct sizes. */
-	.systems={0}
+	#define X(A,B,C) .C={0},
+	COMPONENTS
 };
-unsigned long long entity_new()
+
+unsigned long long EntityNew()
 {
 	for(unsigned long long I=0;I<ENT_MAX;I++) if(!ecs.entities[I]) return I;
-	return ENT_MAX+1;/* force them to overflow if they use it. */
+	return ENT_MAX+1;
 }
-unsigned char system_new(unsigned long long M,fn F)
+
+void SystemNew(unsigned long long M,void (*F)(unsigned long long))
 {
-	for(unsigned long long I=0;I<SYS_MAX;I++)
-	{
-		if(!ecs.systems[I].mask)
-		{
-			ecs.systems[I].mask=M;
-			ecs.systems[I].run=F;
-			return 1;
-		}
-	}
-	return 0;
+	static int sys_id=0;
+	ecs.systems[sys_id].mask=M;
+	ecs.systems[sys_id].run=F;
+	sys_id++;
 }
-void match_systems(entity E)
+
+void ToggleComponent(unsigned long long E,enum Component C)
 {
+	ecs.entities[E]^=1<<C;
 	unsigned long long EM=ecs.entities[E];
-	for(unsigned long long I=0;I<SYS_MAX;I++)
+	for(unsigned long long S=0;S<SYS_MAX;S++)
 	{
-		unsigned long long SM=ecs.systems[I].mask;		
-		ecs.systems[I].entities[E]=SM&EM==SM;
+		unsigned long long SM=ecs.systems[S].mask;
+		unsigned long long R=EM&SM;
+		ecs.systems[S].entities[E]=(R==EM||R==SM)&&(R)!=1;
 	}
 }
-unsigned char has_component(entity E,component C)
+
+void SystemTick()
 {
-	return ecs.entities[E]&C==ecs.entities[E];
-}
-void toggle_component(entity E,component C)
-{
-	ecs.entities[E]&=~(1<<C);
-	match_systems(E);
-}
-void* get_component(entity E,component C)
-{
-	unsigned short S=ecs.structs[C];//Struct size.
-	unsigned long long A=(unsigned long long)(ecs.structs+NCOMPONENTS);//start of components / end of sizes address.
-	for(unsigned char I=0;I<C;I++) A+=ecs.structs[I]*ENT_MAX;//skip by struct arrays
-	return (void*)A+S*E;//index into the right component
+	for(int S=0;S<SYS_MAX;S++)
+	{
+		if(!ecs.systems[S].run) continue;
+		for(int E=0;E<ENT_MAX;E++)
+			if(ecs.systems[S].entities[E])
+				ecs.systems[S].run(E);
+	}
 }
 #endif/*__SECS_H__*/
